@@ -1,0 +1,5 @@
+# Runtime dependencies:
+# None. pastebin.py uses only the Python standard library.
+
+# Build dependency:
+pyinstaller>=6.0,<7.0

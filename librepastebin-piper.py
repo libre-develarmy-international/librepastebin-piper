@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 API_URL = "https://pastebin.com/api/api_post.php"
-GUEST_API_URL = "https://pastebin.com/api/api_guest.php"
 
 VISIBILITY = {
     "public": "0",
@@ -89,9 +88,9 @@ SYNTAX_LANGUAGES = {
     "latex": "LaTeX",
 }
 
-@dataclass(frozen=True)
+@dataclass
 class Config:
-    api_key: str | None
+    api_key: str
     user_key: str | None
     title: str
     language: str
@@ -105,9 +104,9 @@ def create_parser() -> argparse.ArgumentParser:
         description="Create a Pastebin.com paste from stdin.",
         epilog=(
             "Examples:\n"
-            "  echo 'hello' | pastebin\n"
-            "  cat script.py | pastebin -l python -t 'My Script'\n"
-            "  cat file.txt | pastebin -v private -e 1H\n"
+            "  echo 'hello' | pastebin -k YOUR_API_KEY\n"
+            "  cat script.py | pastebin -k YOUR_API_KEY -l python -t 'My Script'\n"
+            "  cat file.txt | pastebin -k YOUR_API_KEY -v private -e 1H\n"
             "\n"
             "Syntax Highlighting Options:\n" +
             "\n".join([f"  {key:20} - {value}" for key, value in sorted(SYNTAX_LANGUAGES.items())]) +
@@ -119,7 +118,7 @@ def create_parser() -> argparse.ArgumentParser:
             "\n".join([f"  {key:10} - {value}" for key, value in sorted(VISIBILITY.items())]) +
             "\n\n"
             "API Key:\n"
-            "  - If no API key is provided, the guest API will be used (limited to 10 minutes expiration)\n"
+            "  - Required for all operations\n"
             "  - Get your API key at: https://pastebin.com/api#1"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -128,8 +127,9 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-k",
         "--api-key",
+        required=True,
         default=os.getenv("PASTEBIN_API_KEY"),
-        help="Pastebin API key or PASTEBIN_API_KEY. Omit to use guest API.",
+        help="Pastebin API key (required) or PASTEBIN_API_KEY environment variable.",
     )
 
     parser.add_argument(
@@ -181,6 +181,11 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 def read_config(arguments: argparse.Namespace) -> Config:
+    if not arguments.api_key:
+        raise ValueError(
+            "API key is required. Use --api-key or set PASTEBIN_API_KEY environment variable."
+        )
+
     return Config(
         api_key=arguments.api_key,
         user_key=arguments.user_key,
@@ -196,13 +201,15 @@ def read_stdin() -> str:
 
     if not content.strip():
         raise ValueError(
-            "No input received. Example: echo 'hello' | pastebin"
+            "No input received. Example: echo 'hello' | pastebin -k YOUR_API_KEY"
         )
 
     return content
 
 def create_form(config: Config, content: str) -> bytes:
     form = {
+        "api_dev_key": config.api_key,
+        "api_option": "paste",
         "api_paste_code": content,
         "api_paste_name": config.title,
         "api_paste_format": config.language,
@@ -210,14 +217,8 @@ def create_form(config: Config, content: str) -> bytes:
         "api_paste_private": VISIBILITY[config.visibility],
     }
 
-    if config.api_key:
-        form["api_dev_key"] = config.api_key
-        form["api_option"] = "paste"
-        if config.user_key:
-            form["api_user_key"] = config.user_key
-    else:
-        form["api_option"] = "paste"
-        config.api_url = GUEST_API_URL
+    if config.user_key:
+        form["api_user_key"] = config.user_key
 
     return urlencode(form).encode("utf-8")
 

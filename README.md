@@ -18,6 +18,7 @@ A simple command line tool to upload text to Pastebin.
 ```bash
 git clone https://github.com/libre-develarmy-international/librepastebin-piper.git
 cd librepastebin-piper
+pip install -r requirements.txt
 ```
 
 ### 2. Make the compilation script executable
